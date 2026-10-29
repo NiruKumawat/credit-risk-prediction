@@ -1,0 +1,275 @@
+{
+  "project": "Credit Risk and Loan Default Prediction System",
+  "company": "Ignosis FinTech Portfolio",
+  "created_at": "2026-10-29T18:19:35.897692",
+  "random_seed": 42,
+  "champion_model_name": "RandomForest",
+  "champion_model_type": "RandomForestClassifier",
+  "selected_decision_threshold": 0.38,
+  "f1_optimal_threshold": 0.53,
+  "dataset_split": {
+    "total_samples": 29944,
+    "train_samples": 17966,
+    "val_samples": 5989,
+    "test_samples": 5989,
+    "train_default_rate": 0.2211,
+    "val_default_rate": 0.2212,
+    "test_default_rate": 0.2211
+  },
+  "validation_benchmark_summary": {
+    "DummyBaseline": {
+      "threshold": 0.5,
+      "accuracy": 0.7788,
+      "precision": 0.0,
+      "recall": 0.0,
+      "specificity": 1.0,
+      "f1_score": 0.0,
+      "roc_auc": 0.5,
+      "pr_auc": 0.2212,
+      "brier_score": 0.1723,
+      "confusion_matrix": {
+        "true_negatives": 4664,
+        "false_positives": 0,
+        "false_negatives": 1325,
+        "true_positives": 0
+      },
+      "training_time_seconds": 0.046
+    },
+    "LogisticRegression": {
+      "threshold": 0.5,
+      "accuracy": 0.7589,
+      "precision": 0.4668,
+      "recall": 0.6317,
+      "specificity": 0.795,
+      "f1_score": 0.5369,
+      "roc_auc": 0.7661,
+      "pr_auc": 0.5141,
+      "brier_score": 0.1883,
+      "confusion_matrix": {
+        "true_negatives": 3708,
+        "false_positives": 956,
+        "false_negatives": 488,
+        "true_positives": 837
+      },
+      "training_time_seconds": 0.092
+    },
+    "DecisionTree": {
+      "threshold": 0.5,
+      "accuracy": 0.7784,
+      "precision": 0.4994,
+      "recall": 0.5985,
+      "specificity": 0.8295,
+      "f1_score": 0.5445,
+      "roc_auc": 0.7772,
+      "pr_auc": 0.5307,
+      "brier_score": 0.1813,
+      "confusion_matrix": {
+        "true_negatives": 3869,
+        "false_positives": 795,
+        "false_negatives": 532,
+        "true_positives": 793
+      },
+      "training_time_seconds": 0.149
+    },
+    "RandomForest": {
+      "threshold": 0.5,
+      "accuracy": 0.7754,
+      "precision": 0.494,
+      "recall": 0.6219,
+      "specificity": 0.819,
+      "f1_score": 0.5506,
+      "roc_auc": 0.7952,
+      "pr_auc": 0.5791,
+      "brier_score": 0.1741,
+      "confusion_matrix": {
+        "true_negatives": 3820,
+        "false_positives": 844,
+        "false_negatives": 501,
+        "true_positives": 824
+      },
+      "training_time_seconds": 0.425
+    },
+    "XGBoost": {
+      "threshold": 0.5,
+      "accuracy": 0.7702,
+      "precision": 0.4851,
+      "recall": 0.6287,
+      "specificity": 0.8105,
+      "f1_score": 0.5477,
+      "roc_auc": 0.7974,
+      "pr_auc": 0.5787,
+      "brier_score": 0.1721,
+      "confusion_matrix": {
+        "true_negatives": 3780,
+        "false_positives": 884,
+        "false_negatives": 492,
+        "true_positives": 833
+      },
+      "training_time_seconds": 2.07
+    }
+  },
+  "champion_val_metrics_at_optimal_threshold": {
+    "threshold": 0.38,
+    "accuracy": 0.663,
+    "precision": 0.376,
+    "recall": 0.7932,
+    "specificity": 0.6261,
+    "f1_score": 0.5102,
+    "roc_auc": 0.7952,
+    "pr_auc": 0.5791,
+    "brier_score": 0.1741,
+    "confusion_matrix": {
+      "true_negatives": 2920,
+      "false_positives": 1744,
+      "false_negatives": 274,
+      "true_positives": 1051
+    }
+  },
+  "test_metrics_default_threshold_0_5": {
+    "threshold": 0.5,
+    "accuracy": 0.7681,
+    "precision": 0.4807,
+    "recall": 0.6125,
+    "specificity": 0.8122,
+    "f1_score": 0.5387,
+    "roc_auc": 0.7817,
+    "pr_auc": 0.5613,
+    "brier_score": 0.1781,
+    "confusion_matrix": {
+      "true_negatives": 3789,
+      "false_positives": 876,
+      "false_negatives": 513,
+      "true_positives": 811
+    }
+  },
+  "test_metrics_optimal_threshold": {
+    "threshold": 0.38,
+    "accuracy": 0.6438,
+    "precision": 0.3592,
+    "recall": 0.7795,
+    "specificity": 0.6054,
+    "f1_score": 0.4918,
+    "roc_auc": 0.7817,
+    "pr_auc": 0.5613,
+    "brier_score": 0.1781,
+    "confusion_matrix": {
+      "true_negatives": 2824,
+      "false_positives": 1841,
+      "false_negatives": 292,
+      "true_positives": 1032
+    }
+  },
+  "business_cost_optimization": {
+    "cost_false_negative": 50000.0,
+    "cost_false_positive": 8000.0,
+    "loss_at_default_0_5": 31436000.0,
+    "loss_at_optimal_threshold": 27652000.0,
+    "cost_savings": 3784000.0,
+    "percent_cost_savings": 12.04
+  },
+  "raw_input_features": [
+    "LIMIT_BAL",
+    "SEX",
+    "EDUCATION",
+    "MARRIAGE",
+    "AGE",
+    "PAY_1",
+    "PAY_2",
+    "PAY_3",
+    "PAY_4",
+    "PAY_5",
+    "PAY_6",
+    "BILL_AMT1",
+    "BILL_AMT2",
+    "BILL_AMT3",
+    "BILL_AMT4",
+    "BILL_AMT5",
+    "BILL_AMT6",
+    "PAY_AMT1",
+    "PAY_AMT2",
+    "PAY_AMT3",
+    "PAY_AMT4",
+    "PAY_AMT5",
+    "PAY_AMT6"
+  ],
+  "preprocessed_feature_names": [
+    "LIMIT_BAL",
+    "AGE",
+    "PAY_1",
+    "PAY_2",
+    "PAY_3",
+    "PAY_4",
+    "PAY_5",
+    "PAY_6",
+    "BILL_AMT1",
+    "BILL_AMT2",
+    "BILL_AMT3",
+    "BILL_AMT4",
+    "BILL_AMT5",
+    "BILL_AMT6",
+    "PAY_AMT1",
+    "PAY_AMT2",
+    "PAY_AMT3",
+    "PAY_AMT4",
+    "PAY_AMT5",
+    "PAY_AMT6",
+    "credit_utilization_ratio",
+    "avg_bill_amt",
+    "avg_pay_amt",
+    "bill_to_limit_avg",
+    "payment_to_bill_ratio",
+    "max_delay_months",
+    "months_delayed_count",
+    "pay_trend",
+    "SEX_2",
+    "EDUCATION_2",
+    "EDUCATION_3",
+    "EDUCATION_4",
+    "MARRIAGE_2",
+    "MARRIAGE_3"
+  ],
+  "top_shap_features": [
+    {
+      "feature": "months_delayed_count",
+      "mean_abs_shap": 0.05545845193227603
+    },
+    {
+      "feature": "max_delay_months",
+      "mean_abs_shap": 0.042028358386356934
+    },
+    {
+      "feature": "PAY_1",
+      "mean_abs_shap": 0.03929480278417836
+    },
+    {
+      "feature": "PAY_2",
+      "mean_abs_shap": 0.019283356770221697
+    },
+    {
+      "feature": "LIMIT_BAL",
+      "mean_abs_shap": 0.014982570852456158
+    },
+    {
+      "feature": "PAY_AMT1",
+      "mean_abs_shap": 0.013503883624655653
+    },
+    {
+      "feature": "avg_pay_amt",
+      "mean_abs_shap": 0.01342851906291247
+    },
+    {
+      "feature": "PAY_3",
+      "mean_abs_shap": 0.012952957186974213
+    },
+    {
+      "feature": "bill_to_limit_avg",
+      "mean_abs_shap": 0.011504232305699798
+    },
+    {
+      "feature": "credit_utilization_ratio",
+      "mean_abs_shap": 0.011253730879149822
+    }
+  ],
+  "shap_fallback_used": false,
+  "disclaimer": "Decision-support prototype for risk scoring. Not intended for fully automated adverse lending decisions without human review in compliance with Fair Lending regulations."
+}

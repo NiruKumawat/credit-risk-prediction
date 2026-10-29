@@ -1,0 +1,364 @@
+================================================================================
+IGNOSIS MACHINE LEARNING ENGINEER INTERVIEW PREPARATION GUIDE
+PROJECT: Credit Risk and Loan Default Prediction System
+CANDIDATE: Entry-Level Machine Learning Engineer
+================================================================================
+
+--------------------------------------------------------------------------------
+SECTION 1: QUICK PROJECT CHEAT SHEET (ELEVATOR PITCH)
+--------------------------------------------------------------------------------
+* Company & Domain: Ignosis (FinTech consumer lending)
+* Objective: Predict probability of loan/card default within the next 30 days
+* Dataset: UCI Credit Card Clients (30,000 observations, Taiwan 2005)
+* Target Variable: default_payment_next_month (0 = Repaid, 1 = Defaulted)
+* Class Imbalance: ~77.9% non-default, ~22.1% default (~3.5:1 ratio)
+* Champion Model: Random Forest Classifier (n_estimators=150, max_depth=8)
+* Validation Benchmark: PR-AUC: 0.5791, ROC-AUC: 0.7952, F1: 0.5506
+* Default Decision Threshold: 0.380 (optimized via business cost matrix)
+* Test Performance (at 0.38): Recall: 77.95% (catches ~78% of all defaults)
+* Business Cost Savings: 12.04% financial loss reduction (NT$ 3.78M saved)
+* Tech Stack: Python 3.13, Scikit-Learn, Pandas, NumPy, SHAP, FastAPI, Streamlit, Pytest, Docker
+
+
+--------------------------------------------------------------------------------
+SECTION 2: CORE ML ARCHITECTURE & MODELING QUESTIONS
+--------------------------------------------------------------------------------
+
+QUESTION 1: Why did you prioritize PR-AUC and Recall over Accuracy?
+--------------------------------------------------------------------------------
+ANSWER:
+In credit card default prediction, the classes are moderately imbalanced: 
+~77.9% of borrowers repay on time, while only ~22.1% default.
+
+If we build a completely naive "Dummy Classifier" that predicts non-default (0) 
+for every single applicant:
+- Accuracy = 77.88% (looks impressive on the surface).
+- Recall = 0.0% (fails to detect a single defaulter).
+- Defaulters missed = 100% of loans default without warning, resulting in massive 
+  capital losses for Ignosis.
+
+Accuracy gives equal weight to predicting the easy majority class. In lending, 
+the financial penalty of a False Negative (approving someone who defaults) is 
+orders of magnitude worse than a False Positive (rejecting someone who is good).
+
+Therefore, we prioritize:
+1. PR-AUC (Precision-Recall Area Under the Curve): Isolates model discrimination 
+   exclusively on the positive minority class (defaulters) across all operating 
+   thresholds. It does not get artificially inflated by true negatives.
+2. Recall / Sensitivity: Measures the fraction of actual defaulters caught by 
+   the system: TP / (TP + FN).
+3. ROC-AUC: Evaluates rank-order discrimination across the entire score distribution.
+
+
+QUESTION 2: How did you prevent data leakage throughout the machine learning pipeline?
+--------------------------------------------------------------------------------
+ANSWER:
+Data leakage happens when information from outside the training dataset is used 
+to create the model, leading to overly optimistic evaluation and poor production 
+generalization. We prevented leakage through five strict engineering practices:
+
+1. Target Isolation: The target column ("default_payment_next_month") was separated 
+   from feature matrix X before any preprocessing or feature engineering.
+2. Stratified Partitioning Before Transformations: We split data into 60% Train, 
+   20% Validation, and 20% Test using stratified sampling to preserve the 22.1% 
+   default rate in all sets, BEFORE computing any statistics.
+3. Fit on Training Only: Scikit-learn transformers (StandardScaler, OneHotEncoder) 
+   were fitted strictly on X_train. The validation, test, and live API payloads 
+   are ONLY transformed using the frozen parameters (means, standard deviations, 
+   and category encodings) learned on the training set.
+4. Row-Wise Feature Engineering: All domain features (e.g. credit utilization ratio, 
+   payment-to-bill ratio, maximum delinquency) are computed strictly on each applicant's 
+   own historical records, never using cross-applicant aggregations or future months.
+5. Preserved Final Test Partition: The test set was touched only once for the final 
+   unbiased evaluation after all model selection and threshold tuning were completed 
+   on the validation set.
+
+
+QUESTION 3: What models did you compare, and why was Random Forest selected as Champion?
+--------------------------------------------------------------------------------
+ANSWER:
+We evaluated 5 diverse model families:
+1. DummyClassifier (Baseline): Benchmark for class priors (PR-AUC: 0.2212, ROC-AUC: 0.5000).
+2. Logistic Regression: Linear parametric model with balanced class weights (PR-AUC: 0.5141, ROC-AUC: 0.7661).
+3. Decision Tree: Non-parametric tree with max_depth=5 and leaf regularization (PR-AUC: 0.5307, ROC-AUC: 0.7772).
+4. Random Forest: Bagging ensemble of 150 decorrelated trees with max_depth=8 (PR-AUC: 0.5791, ROC-AUC: 0.7952).
+5. XGBoost: Gradient boosted decision trees with scale_pos_weight=3.5 (PR-AUC: 0.5784, ROC-AUC: 0.7975).
+
+Why Random Forest Won:
+- Credit risk features contain heavy nonlinear interactions (e.g. high credit 
+  utilization is safe if payment-to-bill ratio is 100%, but toxic if combined 
+  with a payment delay). Linear models cannot capture this without extensive 
+  manual interaction terms.
+- A single Decision Tree captures interactions but easily overfits training noise.
+- Random Forest averages 150 decorrelated trees, reducing variance by (1 - rho)/B 
+  while preserving low bias.
+- Random Forest achieved the highest PR-AUC (0.5791), superior probability 
+  calibration (Brier score 0.1741), and required zero external C++ build dependencies 
+  making it lightweight and reliable for production container deployment.
+
+
+QUESTION 4: What domain features did you engineer, and why did they dominate SHAP importance?
+--------------------------------------------------------------------------------
+ANSWER:
+Raw financial data often conceals borrower behavior until transformed into ratios. 
+We created 8 domain-specific financial features:
+
+1. credit_utilization_ratio: Latest bill statement divided by credit limit 
+   (BILL_AMT1 / LIMIT_BAL). Borrowers maxing out their credit lines (>80%) exhibit 
+   liquidity distress.
+2. max_delay_months: The maximum delinquency status across the past 6 months 
+   max(PAY_1...PAY_6). A borrower who was previously 2+ months late carries residual risk.
+3. months_delayed_count: Count of months where payment status was delayed (>0). 
+   Measures habitual delinquency versus one-time oversight.
+4. payment_to_bill_ratio: Total payments over 6 months divided by total bills. 
+   Measures payoff capacity versus minimum payment treadmill.
+5. pay_trend: Difference between latest delay and 6 months ago (PAY_1 - PAY_6). 
+   Positive indicates deteriorating credit health; negative indicates recovery.
+6. avg_bill_amt: 6-month average bill statement.
+7. avg_pay_amt: 6-month average payment.
+8. bill_to_limit_avg: Average bill to limit ratio.
+
+Impact on SHAP:
+In global SHAP rankings, "months_delayed_count" (#1) and "max_delay_months" (#2) 
+outranked every raw feature in the dataset. In credit risk, behavioral delinquency 
+patterns are vastly more predictive of insolvency than static credit lines or demographics.
+
+
+--------------------------------------------------------------------------------
+SECTION 3: MATHEMATICAL FOUNDATIONS (THEORY & DERIVATIONS)
+--------------------------------------------------------------------------------
+
+QUESTION 5: Explain Logistic Regression mathematically (Sigmoid, Log-Odds, Loss, Odds Ratios).
+--------------------------------------------------------------------------------
+ANSWER:
+1. Sigmoid Function:
+   Maps any linear combination z in (-infinity, +infinity) to probability p in (0, 1):
+       sigma(z) = 1 / (1 + exp(-z))
+   where z = beta_0 + sum_{j=1}^d (beta_j * x_j).
+
+2. Log-Odds (Logit Transformation):
+   Odds is the ratio of default probability to repayment probability:
+       Odds = p / (1 - p)
+   Taking the natural logarithm yields the logit, which is strictly linear:
+       ln( p / (1 - p) ) = beta_0 + sum_{j=1}^d (beta_j * x_j)
+
+3. Odds Ratio Interpretation:
+   If we increase a standardized feature x_j by 1 unit while keeping all other 
+   features constant:
+       New_Odds = Old_Odds * exp(beta_j)
+   - If beta_j > 0: exp(beta_j) > 1 -> Feature increases risk of default.
+   - If beta_j < 0: exp(beta_j) < 1 -> Feature decreases risk of default (protective).
+
+4. Binary Cross-Entropy Loss with L2 Regularization:
+   Parameters beta are learned by minimizing negative log-likelihood (log loss):
+       L(beta) = - (1/N) * sum_{i=1}^N [ y_i * ln(p_i) + (1 - y_i) * ln(1 - p_i) ] + (1 / 2C) * ||beta||_2^2
+   The penalty (1 / 2C) prevents weights from blowing up due to collinearity between 
+   consecutive monthly bill amounts.
+
+5. Class Weighting in Loss:
+   To prevent 78% non-defaulters from drowning the gradients, balanced weighting 
+   multiplies the positive class loss by w_1 = N / (2 * N_1) approx 2.26, forcing the 
+   optimizer to penalize errors on defaulters more heavily.
+
+
+QUESTION 6: Explain Tree Models, Overfitting, and Random Forest Variance Reduction.
+--------------------------------------------------------------------------------
+ANSWER:
+1. Split Criterion (Gini Impurity):
+   Measures how often a randomly chosen element from a node would be incorrectly labeled:
+       G = 1 - sum_{k=0}^1 (p_k)^2 = 2 * p_0 * p_1
+   At each split, the tree maximizes Impurity Reduction:
+       Delta G = G_parent - (N_left / N_parent)*G_left - (N_right / N_parent)*G_right
+
+2. Why Single Trees Overfit:
+   An unconstrained tree splits repeatedly until leaves are pure (Gini = 0). It captures 
+   idiosyncratic sample noise, resulting in low training error (high bias-free) but 
+   extreme test variance.
+   Regularization: Controlled via max_depth, min_samples_split, and min_samples_leaf.
+
+3. Random Forest Theorem (Variance Reduction):
+   Consider an ensemble of B trees, each with individual variance sigma^2 and average 
+   pairwise correlation rho between any two trees:
+       Var(Ensemble) = rho * sigma^2 + ( (1 - rho) / B ) * sigma^2
+   
+   As B (number of trees) grows large (e.g. 150), the second term approaches zero:
+       Var(Ensemble) -> rho * sigma^2
+   
+   To reduce total variance further, we must minimize correlation rho between trees.
+   Random Forest does this via two mechanisms:
+   - Bootstrap Aggregation (Bagging): Each tree is trained on a different bootstrap sample.
+   - Random Subspace Feature Sampling: At each node split, only m = sqrt(d) features are 
+     evaluated. This prevents dominant features (like PAY_1) from appearing at the root 
+     of every tree, decorrelating the trees and drastically lowering rho.
+
+
+QUESTION 7: What is probability calibration and why is it critical in FinTech?
+--------------------------------------------------------------------------------
+ANSWER:
+Discrimination (ROC-AUC) only tells us if defaulters score higher than non-defaulters; 
+it does NOT mean the score is an accurate, real-world probability.
+
+A model is calibrated if:
+Among a group of applicants assigned a 30% default probability, exactly 30% actually default.
+
+Why this is critical for Ignosis:
+1. Expected Loss Calculation:
+   In banking (Basel II/III frameworks), loan reserves and provisions depend on:
+       Expected Loss (EL) = Probability of Default (PD) * Loss Given Default (LGD) * Exposure at Default (EAD)
+   If PD is uncalibrated (e.g. compressed between 0.35 and 0.55), the Expected Loss 
+   calculation is distorted, leading to either reckless under-capitalization or lost business.
+2. Risk-Based Loan Pricing:
+   Interest rates are priced as: Base Rate + Cost of Capital + Expected Loss Margin. 
+   Uncalibrated probabilities prevent accurate risk-adjusted pricing.
+3. Metric:
+   We evaluate calibration via Brier Score: (1/N) * sum (p_i - y_i)^2 (our Random Forest 
+   achieved 0.1741, close to the theoretical minimum for this distribution) and Reliability Diagrams.
+
+
+QUESTION 8: What do SHAP values mean, and why must they NOT be interpreted as causal proof?
+--------------------------------------------------------------------------------
+ANSWER:
+SHAP (SHapley Additive exPlanations) is based on cooperative game theory. It calculates 
+the marginal contribution of each feature across all possible subsets of features:
+    phi_j = sum_{S subset F \ {j}} [ |S|! (|F| - |S| - 1)! / |F|! ] * [ f(S union {j}) - f(S) ]
+
+Key Properties:
+- Local Accuracy: sum(phi_j) = f(x) - E[f(x)] (The sum of SHAP attributions exactly equals 
+  the difference between the applicant's prediction and the base population risk).
+- Consistency: If a model changes so a feature contributes more, its SHAP value cannot decrease.
+
+Why SHAP is NOT Causality:
+- SHAP explains internal model behavior based on statistical correlations in training data.
+- It does NOT prove causal counterfactuals in the real world.
+- Example: Having a lower credit limit (LIMIT_BAL) may have a positive SHAP value for default risk. 
+  This does NOT mean lowering an applicant's limit caused them to default. Rather, cautious underwriters 
+  in 2005 had historically assigned lower limits to borrowers exhibiting risky behavior.
+- Confusing correlation with causality in lending can lead to discriminatory or counter-productive policies.
+
+
+--------------------------------------------------------------------------------
+SECTION 4: BUSINESS COST & THRESHOLD OPTIMIZATION
+--------------------------------------------------------------------------------
+
+QUESTION 9: Why did you choose a decision threshold of 0.38 instead of the standard 0.50?
+--------------------------------------------------------------------------------
+ANSWER:
+In academic ML, 0.50 is used arbitrarily because it assumes symmetric error costs. 
+In commercial FinTech lending, error costs are highly asymmetric:
+- Cost of False Negative (Default Loss): If an underwriter approves someone who defaults, 
+  Ignosis loses the principal balance minus any recovery, plus collection overhead (~NT$ 50,000).
+- Cost of False Positive (Opportunity Loss): If we reject a creditworthy applicant, we only 
+  lose the net interest margin and marketing acquisition cost (~NT$ 8,000).
+
+The cost ratio is ~6.25 to 1. Missing a default is 6.25x more expensive than rejecting a good applicant.
+
+By sweeping thresholds t from 0.05 to 0.95:
+    Total Cost(t) = (FN(t) * 50,000) + (FP(t) * 8,000)
+
+The total cost curve reached its global minimum at threshold t* = 0.38.
+
+Impact on Held-Out Test Set (5,989 applicants):
+- At threshold 0.50: Recall was 61.25%, missing 513 defaults (Total Cost: NT$ 31.44M).
+- At threshold 0.38: Recall jumped to 77.95%, catching 221 additional defaulters and 
+  leaving only 292 missed defaults (Total Cost: NT$ 27.65M).
+- Net Business Value: 12.04% financial loss reduction, saving NT$ 3,784,000 in bad debt.
+
+
+--------------------------------------------------------------------------------
+SECTION 5: SYSTEM SERVING, TESTING & PRODUCTION ENGINEERING
+--------------------------------------------------------------------------------
+
+QUESTION 10: How does your FastAPI service guarantee that production predictions use 
+identical preprocessing as training?
+--------------------------------------------------------------------------------
+ANSWER:
+1. Unified Pipeline Serialization:
+   We bundle the entire transformation logic (CreditRiskFeatureEngineer + ColumnTransformer) 
+   and the final classifier inside a single Scikit-learn Pipeline object serialized as 
+   best_model.joblib. We do NOT maintain separate standalone scaler or encoder files.
+2. Strict Pydantic V2 Schemas:
+   The API validates incoming JSON payloads using the ApplicantFeatures schema:
+   - Field data types (float, int).
+   - Domain bounds (LIMIT_BAL > 0, 18 <= AGE <= 100, PAY_i in [-2, 8]).
+   - Rejects invalid requests with HTTP 422 Unprocessable Entity before reaching the model.
+3. Exact Column Alignment:
+   The CreditRiskService extracts the applicant payload into a Pandas DataFrame using 
+   ALL_RAW_FEATURES, ensuring identical column names, ordering, and data types as training.
+4. Deterministic Transformation:
+   Calling pipeline.predict_proba(df) applies the frozen training scalers, category encodings, 
+   and feature engineering formulas, completely eliminating training-serving skew.
+
+
+QUESTION 11: How did you test your codebase?
+--------------------------------------------------------------------------------
+ANSWER:
+We built a 23-test automated Pytest suite across four testing layers:
+1. Data Ingestion & Cleaning (tests/test_data.py):
+   - Verified column standardization, whitespace stripping, and ID dropping.
+   - Verified undocumented category consolidation (Education {0,5,6}->4, Marriage 0->3).
+   - Tested duplicate removal logic (35 duplicate rows removed).
+   - Tested domain validation functions and range checks.
+2. Feature Engineering & Leakage (tests/test_features.py):
+   - Unit-tested credit utilization, max delinquency, and payment ratio calculations.
+   - Tested that preprocessing pipeline fits on training and transforms new data without refitting.
+   - Verified that the target column is never required or present in the feature pipeline.
+3. Model Training & Evaluation (tests/test_models.py):
+   - Verified that Dummy, LogisticRegression, and RandomForest estimators output valid probabilities [0, 1].
+   - Verified calculation of PR-AUC, ROC-AUC, Brier score, and confusion matrix.
+   - Tested business threshold optimization and calibration curve routines.
+4. API Routes & Schema Validation (tests/test_api.py):
+   - Tested GET /health and GET /model-info endpoints return HTTP 200.
+   - Tested POST /predict and POST /predict-batch return probabilities and risk categories.
+   - Tested custom threshold override parameter.
+   - Tested error handling: negative credit limits, underage applicants (AGE < 18), and missing 
+     fields correctly trigger HTTP 422 Unprocessable Entity.
+
+
+QUESTION 12: If this system was deployed at Ignosis, how would you handle fair lending regulations?
+--------------------------------------------------------------------------------
+ANSWER:
+1. Regulatory Context (ECOA & FCRA):
+   Under the US Equal Credit Opportunity Act (ECOA) Regulation B, creditors cannot 
+   discriminate based on protected attributes (race, color, religion, national origin, 
+   sex, marital status, or age).
+2. Mitigation Strategy for Ignosis:
+   - Feature Removal: In production, protected attributes (SEX, MARRIAGE) should be 
+     removed from the candidate feature list.
+   - Disparate Impact Auditing (The 80% / Four-Fifths Rule):
+     We must calculate the Selection Rate (Approval Rate) across demographic cohorts:
+         Adverse Impact Ratio = Selection Rate (Protected Group) / Selection Rate (Reference Group)
+     If this ratio is less than 0.80, the model exhibits disparate impact and cannot be deployed 
+     without remediation.
+   - Explainable Adverse Action Notices:
+     Under FCRA, if an applicant is denied credit, the lender must provide specific key reasons. 
+     Our local SHAP attribution module (explain_single_applicant) provides the exact top 
+     financial factors (e.g. recent 2-month delay on card, credit utilization > 90%) to generate 
+     legally compliant adverse action letters.
+   - Human-in-the-Loop:
+     The system is strictly designed as a decision-support prototype. Borderline or high-risk 
+     cases are routed to human senior underwriters for comprehensive manual review.
+
+
+QUESTION 13: How would you monitor this model in production for drift?
+--------------------------------------------------------------------------------
+ANSWER:
+We monitor three forms of drift:
+1. Data Drift (Covariate Shift):
+   Input feature distributions change over time (e.g. macroeconomic inflation causes 
+   higher credit card balances). We compute the Population Stability Index (PSI) weekly:
+       PSI = sum ( (Actual% - Expected%) * ln(Actual% / Expected%) )
+   - PSI < 0.10: Stable distribution, no action.
+   - 0.10 <= PSI < 0.25: Moderate drift, investigate features.
+   - PSI >= 0.25: Significant drift, triggers automated retrain alerts.
+2. Concept Drift:
+   The relationship between features and default changes (e.g. an economic recession 
+   causes borrowers with clean credit histories to default). We monitor rolling 30-day 
+   and 90-day delinquency outcomes as loans mature and track degradation in PR-AUC and ROC-AUC.
+3. System Telemetry:
+   Track p95 inference latency, requests per second (RPS), and HTTP 422/500 error rates 
+   via Prometheus and Grafana dashboards.
+
+================================================================================
+END OF INTERVIEW PREPARATION GUIDE
+Ignosis FinTech Portfolio Project | Credit Risk and Loan Default Prediction System
+================================================================================
